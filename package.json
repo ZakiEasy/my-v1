@@ -1,7 +1,0 @@
-{
-  "dependencies": {
-    "@supabase/supabase-js": "^2.57.2",
-    "react-hook-form": "^7.62.0",
-    "zod": "^4.1.5"
-  }
-}
