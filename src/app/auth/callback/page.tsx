@@ -1,13 +1,14 @@
 "use client";
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
+  const params = useSearchParams();
   useEffect(() => {
-    // Supabase gère la session via le hash de l’URL, on peut rediriger après quelques ms
-    const t = setTimeout(() => router.replace("/companies"), 300);
+    const next = params.get("next") || "/companies";
+    const t = setTimeout(() => router.replace(next), 400);
     return () => clearTimeout(t);
-  }, [router]);
+  }, [params, router]);
   return <main className="p-6">Connexion en cours…</main>;
 }

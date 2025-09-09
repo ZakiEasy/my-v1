@@ -9,14 +9,14 @@ export default function NewCompanyPage() {
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
 
-useEffect(() => {
+  useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
         router.replace("/login");
-      } else {
-        setReady(true);
+        return;
       }
+      setReady(true);
     })();
   }, [router]);
 
