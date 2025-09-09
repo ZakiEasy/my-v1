@@ -1,10 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase-client";
 
 export default function NewCompanyPage() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
+
+useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.replace("/login");
+      } else {
+        setReady(true);
+      }
+    })();
+  }, [router]);
+
+  if (!ready) return <main className="p-6">Chargement…</main>;
 
   const createCompany = async () => {
     const user = (await supabase.auth.getUser()).data.user;
