@@ -57,13 +57,18 @@ export default function ProductsFilters({ className, categories = [] }: Props) {
 
       <div className="space-y-1.5">
         <Label>Category</Label>
-        <Select value={cat} onValueChange={setCat}>
-          <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
+<Select
+  value={cat || "all"}
+  onValueChange={(v) => setCat(v === "all" ? "" : v)}
+>
+  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+  <SelectContent>
+    <SelectItem value="all">All</SelectItem>
+    {categories.map((c) => (
+      <SelectItem key={c} value={c}>{c}</SelectItem>
+    ))}
+  </SelectContent>
+</Select>
       </div>
 
       <div className="space-y-1.5">

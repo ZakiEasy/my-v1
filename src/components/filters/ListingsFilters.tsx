@@ -61,16 +61,21 @@ export default function ListingsFilters({ className, incoterms = ["EXW","FOB","C
       </div>
 
       <div className="space-y-1.5">
-        <Label>Incoterm</Label>
-        <Select value={inc} onValueChange={setInc}>
-          <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="">All</SelectItem>
-            {incoterms.map(i => <SelectItem key={i} value={i}>{i}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
+<Label>Incoterm</Label>
+<Select
+  value={inc || "all"}
+  onValueChange={(v) => setInc(v === "all" ? "" : v)}
+>
+  <SelectTrigger><SelectValue placeholder="All" /></SelectTrigger>
+  <SelectContent>
+    {/* use "all" instead of "" */}
+    <SelectItem value="all">All</SelectItem>
+    {incoterms.map((i) => (
+      <SelectItem key={i} value={i}>{i}</SelectItem>
+    ))}
+  </SelectContent>
+</Select>
+ </div>
       <div className="space-y-1.5">
         <Label>Price min</Label>
         <Input inputMode="decimal" value={minPrice} onChange={(e)=>setMinPrice(e.target.value)} />

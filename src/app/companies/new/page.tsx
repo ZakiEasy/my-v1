@@ -1,23 +1,62 @@
 "use client";
-import { useEffect, useState } from "react";
-import { CrudCreate } from "@/components/crud/Crud";
-import { supabase } from "@/lib/supabase-client";
 
-export default function NewCompany(){
+import { useEffect, useState } from "react";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+
+const Schema = z.object({
+  name: z.string().min(2, "Name too short"),
+  country: z.string().optional(),
+});
+
+export default function NewCompanyPage() {
+  const router = useRouter();
   const [owner, setOwner] = useState<string>("");
-  useEffect(()=>{ (async()=>{ setOwner((await supabase.auth.getUser()).data.user?.id ?? ""); })(); },[]);
-  if(!owner) return <main className="p-6">Connecte-toi puis reviens ici.</main>;
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast.warning("Please sign in"); router.replace("/login"); return; }
+      setOwner(user.id);
+    })();
+  }, [router]);
+
+  const { register, handleSubmit, formState: { errors, isSubmitting } } =
+    useForm<z.infer<typeof Schema>>({ resolver: zodResolver(Schema) });
+
+  async function onSubmit(values: z.infer<typeof Schema>) {
+    const { error } = await supabase.from("companies").insert({ ...values, owner });
+    if (error) return toast.error(error.message);
+    toast.success("Company created ✅");
+    router.push("/companies");
+  }
+
+  if (!owner) return <div className="p-6">Loading…</div>;
+
   return (
-    <main className="p-6">
-      <CrudCreate
-        table="companies"
-        title="Company"
-        preset={{ owner }}
-        fields={[
-          { name:"name", label:"Nom"},
-          { name:"country", label:"Pays"}
-        ]}
-      />
-    </main>
+    <section className="max-w-md space-y-4">
+      <h1 className="text-2xl font-semibold">New company</h1>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-1.5">
+          <Label>Name</Label>
+          <Input {...register("name")} />
+          {errors.name && <p className="text-xs text-red-600">{errors.name.message}</p>}
+        </div>
+        <div className="space-y-1.5">
+          <Label>Country</Label>
+          <Input {...register("country")} placeholder="France" />
+        </div>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Creating…" : "Create"}
+        </Button>
+      </form>
+    </section>
   );
 }
