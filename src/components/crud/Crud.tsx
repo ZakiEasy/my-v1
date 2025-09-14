@@ -1,54 +1,158 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 
-type Field = { name: string; label: string; type?: "text" | "number"; placeholder?: string };
-type Props = {
-  table: string;
-  title: string;
-  fields: Field[];
-  preset?: Record<string, any>; // valeurs auto (ex: owner, company_id)
+type Scalar = string | number | null;
+type RowRecord = Record<string, unknown>;
+
+type FieldType = "text" | "number" | "textarea";
+
+export type Field<T extends RowRecord> = {
+  /** Nom de la colonne Supabase (clé du type T) */
+  name: keyof T & string;
+  label: string;
+  type?: FieldType;
+  placeholder?: string;
 };
 
-export function CrudList({ table, title }: { table: string; title: string }) {
-  const [rows, setRows] = useState<any[]>([]);
-  useEffect(() => { (async () => {
-    const { data, error } = await supabase.from(table).select("*").order("created_at",{ascending:false});
-    if (!error) setRows(data || []);
-  })(); }, [table]);
+export type CrudCreateProps<T extends RowRecord> = {
+  table: string;
+  title: string;
+  fields: Field<T>[];
+  /** valeurs auto (ex: owner, company_id) */
+  preset?: Partial<T>;
+  /** callback après création */
+  onCreated?: (inserted: T) => void;
+};
+
+export function CrudList<T extends RowRecord>({
+  table,
+  title,
+}: {
+  table: string;
+  title: string;
+}) {
+  const [rows, setRows] = useState<T[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data, error } = await supabase
+        .from(table)
+        .select<string, T>("*")
+        .order("created_at", { ascending: false });
+      if (error) {
+        toast.error(error.message);
+        setRows([]);
+        return;
+      }
+      setRows(data ?? []);
+    })();
+  }, [table]);
+
   return (
-    <div className="space-y-3">
-      <h2 className="text-xl font-semibold">{title} — Liste</h2>
-      <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto">{JSON.stringify(rows, null, 2)}</pre>
-    </div>
+    <section className="space-y-3">
+      <h2 className="text-xl font-semibold">{title} — List</h2>
+
+      {rows.length === 0 ? (
+        <div className="rounded border p-4 text-sm">No data yet.</div>
+      ) : (
+        <div className="rounded border p-3">
+          {/* Pour un rendu générique, on garde le JSON lisible */}
+          <pre className="text-xs bg-muted/40 p-2 rounded overflow-auto">
+            {JSON.stringify(rows, null, 2)}
+          </pre>
+        </div>
+      )}
+    </section>
   );
 }
 
-export function CrudCreate({ table, title, fields, preset }: Props) {
-  const [form, setForm] = useState<Record<string, any>>({});
-  useEffect(()=>{ setForm(preset || {}); },[preset]);
-  async function submit() {
-    const payload = { ...(preset||{}), ...form };
-    const { error } = await supabase.from(table).insert(payload);
-    if (error) return alert(error.message);
-    alert(`${title} créé(e) ✅`);
+export function CrudCreate<T extends RowRecord>({
+  table,
+  title,
+  fields,
+  preset,
+  onCreated,
+}: CrudCreateProps<T>) {
+  const [form, setForm] = useState<Partial<T>>({});
+
+  useEffect(() => {
+    setForm(preset ?? {});
+  }, [preset]);
+
+  function stringify(val: unknown): string {
+    if (val === null || val === undefined) return "";
+    if (typeof val === "string") return val;
+    if (typeof val === "number") return String(val);
+    return JSON.stringify(val);
   }
+
+  async function submit() {
+    const payload = { ...(preset ?? {}), ...(form as T) };
+
+    const { data, error } = await supabase
+      .from(table)
+      .insert(payload)
+      .select()
+      .single<T>();
+
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success(`${title} created ✅`);
+    if (data && onCreated) onCreated(data);
+  }
+
   return (
-    <div className="space-y-3">
-      <h2 className="text-xl font-semibold">{title} — Nouveau</h2>
-      {fields.map(f=>(
-        <div key={f.name}>
-          <label className="block text-sm mb-1">{f.label}</label>
-          <input
-            className="border p-2 w-full"
-            type={f.type === "number" ? "number" : "text"}
-            placeholder={f.placeholder}
-            value={form[f.name] ?? ""}
-            onChange={e=>setForm(s=>({...s,[f.name]: f.type==="number" ? Number(e.target.value) : e.target.value}))}
-          />
-        </div>
-      ))}
-      <button className="bg-blue-600 text-white px-4 py-2 rounded" onClick={submit}>Créer</button>
-    </div>
+    <section className="space-y-4">
+      <h2 className="text-xl font-semibold">{title} — New</h2>
+
+      <div className="space-y-3">
+        {fields.map((f) => {
+          const val = form[f.name];
+          const common = {
+            id: `field-${String(f.name)}`,
+            value: stringify(val),
+            placeholder: f.placeholder,
+            onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+              setForm((s) => {
+                const raw = e.target.value;
+                let next: Scalar = raw;
+                if (f.type === "number") {
+                  // autoriser vide → null
+                  next = raw === "" ? null : Number(raw);
+                }
+                return { ...s, [f.name]: next } as Partial<T>;
+              }),
+          };
+
+          return (
+            <div key={String(f.name)} className="space-y-1.5">
+              <Label htmlFor={common.id}>{f.label}</Label>
+
+              {f.type === "textarea" ? (
+                <Textarea {...common} />
+              ) : (
+                <Input
+                  {...common}
+                  inputMode={f.type === "number" ? "decimal" : undefined}
+                  type={f.type === "number" ? "number" : "text"}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <Button onClick={submit}>Create</Button>
+    </section>
   );
 }
