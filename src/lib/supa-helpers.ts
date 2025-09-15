@@ -1,3 +1,5 @@
+"use client";
+
 import { supabase } from "@/lib/supabase-client";
 
 /** Return the current user id or null */
