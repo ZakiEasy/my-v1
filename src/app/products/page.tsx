@@ -11,12 +11,12 @@ type Product = { id:string; name:string; category:string|null; description:strin
 
 export default function ProductsPage() {
   const sp = useSearchParams();
-  const [rows, setRows] = useState<Product[] | null>(null);
+  //const [rows, setRows] = useState<Product[] | null>(null);
 
   const q = sp.get("q") ?? "";
   const cat = sp.get("cat") ?? "";
   const sort = sp.get("sort") ?? "created_desc";
-
+/*
   useEffect(() => {
     (async () => {
       setRows(null);
@@ -40,6 +40,7 @@ export default function ProductsPage() {
       setRows(error ? [] : (data as Product[]));
     })();
   }, [q, cat, sort]);
+  */
 
   return (
     <section className="space-y-4">

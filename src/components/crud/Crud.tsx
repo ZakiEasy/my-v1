@@ -8,27 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
-type Scalar = string | number | null;
 type RowRecord = Record<string, unknown>;
-
 type FieldType = "text" | "number" | "textarea";
 
 export type Field<T extends RowRecord> = {
-  /** Nom de la colonne Supabase (clé du type T) */
   name: keyof T & string;
   label: string;
   type?: FieldType;
   placeholder?: string;
-};
-
-export type CrudCreateProps<T extends RowRecord> = {
-  table: string;
-  title: string;
-  fields: Field<T>[];
-  /** valeurs auto (ex: owner, company_id) */
-  preset?: Partial<T>;
-  /** callback après création */
-  onCreated?: (inserted: T) => void;
 };
 
 export function CrudList<T extends RowRecord>({
@@ -58,12 +45,10 @@ export function CrudList<T extends RowRecord>({
   return (
     <section className="space-y-3">
       <h2 className="text-xl font-semibold">{title} — List</h2>
-
       {rows.length === 0 ? (
         <div className="rounded border p-4 text-sm">No data yet.</div>
       ) : (
         <div className="rounded border p-3">
-          {/* Pour un rendu générique, on garde le JSON lisible */}
           <pre className="text-xs bg-muted/40 p-2 rounded overflow-auto">
             {JSON.stringify(rows, null, 2)}
           </pre>
@@ -79,7 +64,13 @@ export function CrudCreate<T extends RowRecord>({
   fields,
   preset,
   onCreated,
-}: CrudCreateProps<T>) {
+}: {
+  table: string;
+  title: string;
+  fields: Field<T>[];
+  preset?: Partial<T>;
+  onCreated?: (inserted: T) => void;
+}) {
   const [form, setForm] = useState<Partial<T>>({});
 
   useEffect(() => {
@@ -95,18 +86,12 @@ export function CrudCreate<T extends RowRecord>({
 
   async function submit() {
     const payload = { ...(preset ?? {}), ...(form as T) };
-
     const { data, error } = await supabase
       .from(table)
       .insert(payload)
       .select()
       .single<T>();
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
+    if (error) return toast.error(error.message);
     toast.success(`${title} created ✅`);
     if (data && onCreated) onCreated(data);
   }
@@ -114,7 +99,6 @@ export function CrudCreate<T extends RowRecord>({
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">{title} — New</h2>
-
       <div className="space-y-3">
         {fields.map((f) => {
           const val = form[f.name];
@@ -122,12 +106,13 @@ export function CrudCreate<T extends RowRecord>({
             id: `field-${String(f.name)}`,
             value: stringify(val),
             placeholder: f.placeholder,
-            onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+            onChange: (
+              e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+            ) =>
               setForm((s) => {
                 const raw = e.target.value;
-                let next: Scalar = raw;
+                let next: string | number | null = raw;
                 if (f.type === "number") {
-                  // autoriser vide → null
                   next = raw === "" ? null : Number(raw);
                 }
                 return { ...s, [f.name]: next } as Partial<T>;
@@ -137,7 +122,6 @@ export function CrudCreate<T extends RowRecord>({
           return (
             <div key={String(f.name)} className="space-y-1.5">
               <Label htmlFor={common.id}>{f.label}</Label>
-
               {f.type === "textarea" ? (
                 <Textarea {...common} />
               ) : (
@@ -151,7 +135,6 @@ export function CrudCreate<T extends RowRecord>({
           );
         })}
       </div>
-
       <Button onClick={submit}>Create</Button>
     </section>
   );
