@@ -8,9 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ListingsFilters from "@/components/filters/ListingsFilters";
 import { useSearchParams } from "next/navigation";
 
-// Hard stop for SSG/ISR: treat this page as dynamic-only
+// OK sur page client
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 type Row = {
   id: string;
