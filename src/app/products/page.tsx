@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -7,30 +8,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ProductsFilters from "@/components/filters/ProductsFilters";
 import { useSearchParams } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 type Product = { id:string; name:string; category:string|null; description:string|null; created_at:string };
 
-export default function ProductsPage() {
+function ProductsInner() {
   const sp = useSearchParams();
-  //const [rows, setRows] = useState<Product[] | null>(null);
+  const [rows, setRows] = useState<Product[] | null>(null);
 
   const q = sp.get("q") ?? "";
   const cat = sp.get("cat") ?? "";
   const sort = sp.get("sort") ?? "created_desc";
-/*
+
   useEffect(() => {
     (async () => {
       setRows(null);
       let query = supabase.from("products")
         .select("id,name,category,description,created_at");
 
-      // text search across name + description
-      if (q) {
-        query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
-      }
-      // category
+      if (q) query = query.or(`name.ilike.%${q}%,description.ilike.%${q}%`);
       if (cat) query = query.eq("category", cat);
 
-      // sorting
       if (sort === "name_asc") query = query.order("name", { ascending: true });
       else if (sort === "name_desc") query = query.order("name", { ascending: false });
       else if (sort === "created_asc") query = query.order("created_at", { ascending: true });
@@ -40,7 +38,6 @@ export default function ProductsPage() {
       setRows(error ? [] : (data as Product[]));
     })();
   }, [q, cat, sort]);
-  */
 
   return (
     <section className="space-y-4">
@@ -78,5 +75,13 @@ export default function ProductsPage() {
         </div>
       )}
     </section>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <ProductsInner />
+    </Suspense>
   );
 }

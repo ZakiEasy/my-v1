@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import ListingsFilters from "@/components/filters/ListingsFilters";
 import { useSearchParams } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 type Row = {
   id: string;
@@ -20,7 +22,7 @@ type Row = {
   products?: { name: string | null } | null;
 };
 
-export default function ListingsPage() {
+function ListingsInner() {
   const sp = useSearchParams();
   const [rows, setRows] = useState<Row[] | null>(null);
 
@@ -34,13 +36,12 @@ export default function ListingsPage() {
   useEffect(() => {
     (async () => {
       setRows(null);
-      // join product name (if you created a FK products->listings)
+
       let query = supabase
         .from("listings")
         .select("id,product_id,moq,price_min,price_max,incoterm,status,created_at,products(name)")
         .limit(200);
 
-      // text search on listing or product name (requires PostgREST or filter on joined columns)
       if (q) {
         query = query.or(
           `incoterm.ilike.%${q}%,status.ilike.%${q}%,products.name.ilike.%${q}%`
@@ -51,7 +52,6 @@ export default function ListingsPage() {
       if (pmax != null) query = query.lte("price_max", pmax);
       if (moq != null) query = query.gte("moq", moq);
 
-      // sort
       if (sort === "price_asc") query = query.order("price_min", { ascending: true, nullsFirst: true });
       else if (sort === "price_desc") query = query.order("price_min", { ascending: false, nullsFirst: true });
       else if (sort === "moq_asc") query = query.order("moq", { ascending: true, nullsFirst: true });
@@ -108,5 +108,13 @@ export default function ListingsPage() {
         </div>
       )}
     </section>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <ListingsInner />
+    </Suspense>
   );
 }
