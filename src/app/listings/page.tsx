@@ -8,7 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ListingsFilters from "@/components/filters/ListingsFilters";
 import { useSearchParams } from "next/navigation";
 
+// Hard stop for SSG/ISR: treat this page as dynamic-only
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 type Row = {
   id: string;
@@ -39,7 +41,9 @@ function ListingsInner() {
 
       let query = supabase
         .from("listings")
-        .select("id,product_id,moq,price_min,price_max,incoterm,status,created_at,products(name)")
+        .select(
+          "id,product_id,moq,price_min,price_max,incoterm,status,created_at,products(name)"
+        )
         .limit(200);
 
       if (q) {
@@ -52,11 +56,19 @@ function ListingsInner() {
       if (pmax != null) query = query.lte("price_max", pmax);
       if (moq != null) query = query.gte("moq", moq);
 
-      if (sort === "price_asc") query = query.order("price_min", { ascending: true, nullsFirst: true });
-      else if (sort === "price_desc") query = query.order("price_min", { ascending: false, nullsFirst: true });
-      else if (sort === "moq_asc") query = query.order("moq", { ascending: true, nullsFirst: true });
-      else if (sort === "moq_desc") query = query.order("moq", { ascending: false, nullsFirst: true });
-      else if (sort === "created_asc") query = query.order("created_at", { ascending: true });
+      if (sort === "price_asc")
+        query = query.order("price_min", { ascending: true, nullsFirst: true });
+      else if (sort === "price_desc")
+        query = query.order("price_min", {
+          ascending: false,
+          nullsFirst: true,
+        });
+      else if (sort === "moq_asc")
+        query = query.order("moq", { ascending: true, nullsFirst: true });
+      else if (sort === "moq_desc")
+        query = query.order("moq", { ascending: false, nullsFirst: true });
+      else if (sort === "created_asc")
+        query = query.order("created_at", { ascending: true });
       else query = query.order("created_at", { ascending: false });
 
       const { data, error } = await query;
@@ -68,7 +80,9 @@ function ListingsInner() {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Listings</h1>
-        <Button asChild><Link href="/listings/new">New listing</Link></Button>
+        <Button asChild>
+          <Link href="/listings/new">New listing</Link>
+        </Button>
       </div>
 
       <ListingsFilters className="mt-2" />
@@ -90,9 +104,11 @@ function ListingsInner() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
+              {rows.map((r) => (
                 <tr key={r.id} className="border-t">
-                  <td className="p-3">{r.products?.name ?? r.product_id.slice(0,8)+"…"}</td>
+                  <td className="p-3">
+                    {r.products?.name ?? r.product_id.slice(0, 8) + "…"}
+                  </td>
                   <td className="p-3">{r.incoterm ?? "—"}</td>
                   <td className="p-3">{r.moq ?? "—"}</td>
                   <td className="p-3">
@@ -100,7 +116,9 @@ function ListingsInner() {
                       ? `${r.price_min ?? "?"} – ${r.price_max ?? "?"}`
                       : "—"}
                   </td>
-                  <td className="p-3">{new Date(r.created_at).toLocaleDateString()}</td>
+                  <td className="p-3">
+                    {new Date(r.created_at).toLocaleDateString()}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -112,6 +130,7 @@ function ListingsInner() {
 }
 
 export default function Page() {
+  // 👇 The boundary that Next requires during prerender
   return (
     <Suspense fallback={<div className="p-6">Loading…</div>}>
       <ListingsInner />
