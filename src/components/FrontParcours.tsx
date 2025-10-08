@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+"use client";
+import Link from "next/link";
+
+import React, { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,14 +16,13 @@ import { ChevronRight, FileUp, ShieldCheck, Receipt, ShoppingCart, CheckCircle2,
 interface Product {
   id: string;
   name: string;
-  supplier: string;
+  supplier_name: string;
   category: string;
   country: string;
-  minOrder: number;
-  price: number; // EUR unit price indicative
-  currency?: string;
-  rating?: number; // 1..5
-  inStock?: boolean;
+  min_order: number;
+  price: number;
+  rating?: number;
+  in_stock?: boolean;
 }
 
 // --- Mock data (à brancher sur Supabase plus tard) ---
@@ -31,10 +33,9 @@ const MOCK_PRODUCTS: Product[] = [
   { id: "p4", name: "Épices ras el hanout 1kg", supplier: "Atlas Spice", category: "Épices", country: "Maroc", minOrder: 100, price: 7.20, rating: 4.4, inStock: true },
   { id: "p5", name: "Harissa 190g x 24", supplier: "Cap Bon", category: "Condiments", country: "Tunisie", minOrder: 80, price: 28.0, rating: 4.7, inStock: true },
 ];
-
-export default function FrontParcours() {
+export default function FrontParcours({ produits = [] }: { produits: Product[] }) {
   const [tab, setTab] = useState<string>("fournisseur");
-
+  
   return (
     <main className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-slate-800">
       <header className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur">
@@ -65,26 +66,26 @@ export default function FrontParcours() {
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
               <div className="grid gap-4 md:grid-cols-3">
                 <EtapeCard
-                  icon={<Receipt className="h-5 w-5" />}
-                  title="Créer une RFQ"
-                  desc="Décrivez votre offre, quantités, délais et incoterms."
-                  ctaLabel="Nouvelle RFQ"
-                  onClick={() => console.log("/rfq/new")}
-                />
-                <EtapeCard
-                  icon={<FileUp className="h-5 w-5" />}
-                  title="Uploader des preuves (BL/PO/LC)"
-                  desc="Chargez vos documents dans le bucket 'evidence'."
-                  ctaLabel="Uploader"
-                  onClick={() => console.log("/evidence/upload")}
-                />
-                <EtapeCard
-                  icon={<ShieldCheck className="h-5 w-5" />}
-                  title="Conformité & KYC"
-                  desc="Vérifiez la conformité, certificats et statuts."
-                  ctaLabel="Lancer contrôle"
-                  onClick={() => console.log("/compliance/check")}
-                />
+                   icon={<Receipt className="h-5 w-5" />}
+  title="Créer une RFQ"
+  desc="Décrivez votre offre, quantités, délais et incoterms."
+  ctaLabel="Nouvelle RFQ"
+  href="/rfq/new"        // <- TU AS DEJA src/app/rfq/new
+/>
+<EtapeCard
+  icon={<FileUp className="h-5 w-5" />}
+  title="Uploader des preuves (BL/PO/LC)"
+  desc="Chargez vos documents dans le bucket 'evidence'."
+  ctaLabel="Uploader"
+  href="/evidence/upload" // <- TU AS DEJA src/app/evidence/upload
+/>
+<EtapeCard
+  icon={<ShieldCheck className="h-5 w-5" />}
+  title="Conformité & KYC"
+  desc="Vérifiez la conformité, certificats et statuts."
+  ctaLabel="Lancer contrôle"
+  href="/compliance/check" // <- Dossier présent, ajoute page.tsx si manquant
+/>
               </div>
 
               <Card className="mt-6">
@@ -113,7 +114,7 @@ export default function FrontParcours() {
                           <tr key={r.id} className="border-t">
                             <td className="py-3 font-medium">{r.id}</td>
                             <td className="py-3">{r.produit}</td>
-                            <td className="py-3">{r.qty.toLocaleString()}</td>
+                            <td className="py-3">{r.qty.toLocaleString('fr-FR')}</td>
                             <td className="py-3">
                               <Badge variant={r.statut === "Acceptée" ? "default" : "secondary"}>{r.statut}</Badge>
                             </td>
@@ -150,7 +151,9 @@ export default function FrontParcours() {
   );
 }
 
-function EtapeCard({ icon, title, desc, ctaLabel, onClick }: { icon: React.ReactNode; title: string; desc: string; ctaLabel: string; onClick: () => void; }) {
+function EtapeCard({ icon, title, desc, ctaLabel, href }: {
+  icon: React.ReactNode; title: string; desc: string; ctaLabel: string; href: string;
+}) {
   return (
     <Card className="rounded-2xl shadow-sm">
       <CardHeader className="space-y-2">
@@ -159,10 +162,12 @@ function EtapeCard({ icon, title, desc, ctaLabel, onClick }: { icon: React.React
         <CardDescription>{desc}</CardDescription>
       </CardHeader>
       <CardFooter>
-        <Button onClick={onClick} className="gap-2">
-          {ctaLabel}
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+        <Link href={href} className="inline-flex">
+          <Button className="gap-2">
+            {ctaLabel}
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </Link>
       </CardFooter>
     </Card>
   );
@@ -225,15 +230,21 @@ function FiltresProduits() {
 }
 
 function GrilleProduits({ produits }: { produits: Product[] }) {
-  const [cart, setCart] = useState<string[]>([]);
+  // état panier
+const [cart, setCart] = useState<string[]>([]);
 
-  const add = (id: string) => setCart((s) => (s.includes(id) ? s : [...s, id]));
-  const remove = (id: string) => setCart((s) => s.filter((x) => x !== id));
+// add/remove avec types explicites
+const add = (id: string) =>
+  setCart((s: string[]) => (s.includes(id) ? s : [...s, id]));
 
-  const total = useMemo(() => {
-    const map = new Map(produits.map(p => [p.id, p.price]));
-    return cart.reduce((sum, id) => sum + (map.get(id) || 0), 0);
-  }, [cart, produits]);
+const remove = (id: string) =>
+  setCart((s: string[]) => s.filter((x: string) => x !== id));
+
+// total avec reduce typé
+const total = useMemo(() => {
+  const map = new Map(produits.map((p) => [p.id, p.price]));
+  return cart.reduce((sum: number, id: string) => sum + (map.get(id) ?? 0), 0);
+}, [cart, produits]);
 
   return (
     <div className="mt-4 grid gap-4 lg:grid-cols-3 md:grid-cols-2">
@@ -270,9 +281,11 @@ function GrilleProduits({ produits }: { produits: Product[] }) {
                 <ShoppingCart className="h-4 w-4" /> Ajouter
               </Button>
             )}
-            <Button variant="ghost" size="sm" className="gap-1">
-              Détails <ChevronRight className="h-4 w-4" />
-            </Button>
+            <Link href={`/products/${p.id}`} className="inline-flex">
+  <Button variant="ghost" size="sm" className="gap-1">
+    Détails <ChevronRight className="h-4 w-4" />
+  </Button>
+</Link>
           </CardFooter>
         </Card>
       ))}

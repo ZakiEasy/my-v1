@@ -8,15 +8,12 @@ import {
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-/** Client (navigateur) — pour composants client */
 export function supabaseBrowser() {
   return createBrowserClientSSR(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-/** Server (App Router) — Next 15+: cookies() est async */
 export async function supabaseServer() {
-  const cookieStore = await cookies(); // <-- IMPORTANT
-
+  const cookieStore = await cookies();
   return createServerClientSSR(SUPABASE_URL, SUPABASE_ANON_KEY, {
     cookies: {
       get(name: string) {
