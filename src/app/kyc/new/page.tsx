@@ -5,7 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { getMyCompanies } from "@/lib/supa-helpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -44,7 +44,7 @@ export default function NewKycPage() {
   }, [router]);
 
   async function onSubmit(values: z.infer<typeof Schema>) {
-    const { error } = await supabase.from("kyc_documents").insert({
+    const { error } = await createClient.from("kyc_documents").insert({
       company_id: values.company_id,
       doc_type: values.doc_type,
       file_url: values.file_url,

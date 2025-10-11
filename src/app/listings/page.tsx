@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,7 +38,7 @@ function ListingsInner() {
     (async () => {
       setRows(null);
 
-      let query = supabase
+      let query = createClient
         .from("listings")
         .select(
           "id,product_id,moq,price_min,price_max,incoterm,status,created_at,products(name)"

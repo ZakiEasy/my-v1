@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +25,7 @@ export default function KycPage() {
       const comps = await getMyCompanies();
       const ids = comps.map(c => c.id);
       if (ids.length === 0) { setRows([]); return; }
-      const { data, error } = await supabase
+      const { data, error } = await createClient
         .from("kyc_documents")
         .select("id,company_id,doc_type,file_url,status,created_at")
         .in("company_id", ids)

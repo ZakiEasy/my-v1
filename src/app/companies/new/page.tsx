@@ -5,7 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,7 @@ export default function NewCompanyPage() {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await createClient.auth.getUser();
       if (!user) { toast.warning("Please sign in"); router.replace("/login"); return; }
       setOwner(user.id);
     })();
@@ -32,7 +32,7 @@ export default function NewCompanyPage() {
     useForm<z.infer<typeof Schema>>({ resolver: zodResolver(Schema) });
 
   async function onSubmit(values: z.infer<typeof Schema>) {
-    const { error } = await supabase.from("companies").insert({ ...values, owner });
+    const { error } = await createClient.from("companies").insert({ ...values, owner });
     if (error) return toast.error(error.message);
     toast.success("Company created ✅");
     router.push("/companies");

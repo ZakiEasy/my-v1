@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase-client";
-import { getParticipatingRfqOptions, getCurrentUserId } from "@/lib/supa-helpers";
+import { createClient } from "@/lib/supabase-browser"; // ✅ client-side
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +28,8 @@ type RfqOption = { id: string; label: string };
 
 export default function NewMessagePage() {
   const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
   const [rfqs, setRfqs] = useState<RfqOption[]>([]);
   const [rfqId, setRfqId] = useState("");
   const [sender, setSender] = useState<string | null>(null);
@@ -37,41 +38,96 @@ export default function NewMessagePage() {
   const [mode, setMode] = useState<"select" | "manual">("select");
   const [rfqIdManual, setRfqIdManual] = useState("");
 
-  const { register, handleSubmit, setValue, formState: { errors, isSubmitting } } =
-    useForm<z.infer<typeof Schema>>({
-      resolver: zodResolver(Schema),
-      defaultValues: { rfq_id: "", body: "" },
-    });
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<z.infer<typeof Schema>>({
+    resolver: zodResolver(Schema),
+    defaultValues: { rfq_id: "", body: "" },
+  });
+
+  // --- Helpers client-safe ---
+  async function getCurrentUserIdClient(): Promise<string | null> {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) {
+      console.warn("auth.getUser error:", error.message);
+      return null;
+    }
+    return data.user?.id ?? null;
+  }
+
+  // Remplace cette fonction par ta vue/RPC si tu as déjà "participating RFQs"
+  async function getParticipatingRfqOptionsClient(uid: string): Promise<RfqOption[]> {
+    // Exemple générique : on liste les RFQs que l'utilisateur possède (ou adapte à ta vue de participation)
+    const { data, error } = await supabase
+      .from("rfqs")
+      .select("id,title,name")
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      toast.error(error.message);
+      return [];
+    }
+
+    // Label: title > name > id
+    return (data ?? []).map((r: any) => ({
+      id: r.id,
+      label: r.title ?? r.name ?? r.id,
+    }));
+  }
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
-      const uid = await getCurrentUserId();
-      if (!uid) { toast.warning("Please sign in"); router.replace("/login"); return; }
+      // auth
+      const uid = await getCurrentUserIdClient();
+      if (!mounted) return;
+
+      if (!uid) {
+        toast.warning("Please sign in");
+        router.replace("/login");
+        return;
+      }
       setSender(uid);
 
-      const list = await getParticipatingRfqOptions();
+      // RFQs list
+      const list = await getParticipatingRfqOptionsClient(uid);
+      if (!mounted) return;
+
       setRfqs(list);
       if (list[0]) {
         setRfqId(list[0].id);
-        setValue("rfq_id", list[0].id);
+        setValue("rfq_id", list[0].id, { shouldValidate: true });
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+
+    return () => {
+      mounted = false;
+    };
+  }, [router, setValue, supabase]);
 
   useEffect(() => {
     // keep form rfq_id in sync with UI mode
-    setValue("rfq_id", mode === "select" ? rfqId : rfqIdManual);
+    setValue("rfq_id", mode === "select" ? rfqId : rfqIdManual, { shouldValidate: true });
   }, [mode, rfqId, rfqIdManual, setValue]);
 
   async function onSubmit(values: z.infer<typeof Schema>) {
-    if (!sender) { toast.error("Not signed in"); return; }
+    if (!sender) {
+      toast.error("Not signed in");
+      return;
+    }
     const { error } = await supabase.from("messages").insert({
       rfq_id: values.rfq_id,
       sender,
       body: values.body,
     });
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Message sent ✅");
     router.push("/messages");
   }
@@ -111,10 +167,15 @@ export default function NewMessagePage() {
           <Label>RFQ</Label>
           <Select
             value={rfqId}
-            onValueChange={(v) => { setRfqId(v); setValue("rfq_id", v, { shouldValidate: true }); }}
+            onValueChange={(v) => {
+              setRfqId(v);
+              setValue("rfq_id", v, { shouldValidate: true });
+            }}
             disabled={!hasRfqs}
           >
-            <SelectTrigger><SelectValue placeholder={hasRfqs ? "Choose RFQ" : "No RFQ available"} /></SelectTrigger>
+            <SelectTrigger>
+              <SelectValue placeholder={hasRfqs ? "Choose RFQ" : "No RFQ available"} />
+            </SelectTrigger>
             <SelectContent>
               {rfqs.map((r) => (
                 <SelectItem key={r.id} value={r.id}>
@@ -123,8 +184,14 @@ export default function NewMessagePage() {
               ))}
             </SelectContent>
           </Select>
-          {errors.rfq_id && <p className="text-xs text-red-600">{errors.rfq_id.message}</p>}
-          {!hasRfqs && <p className="text-xs text-muted-foreground">You have no RFQs to pick; switch to “Enter RFQ ID”.</p>}
+          {errors.rfq_id && (
+            <p className="text-xs text-red-600">{errors.rfq_id.message}</p>
+          )}
+          {!hasRfqs && (
+            <p className="text-xs text-muted-foreground">
+              You have no RFQs to pick; switch to “Enter RFQ ID”.
+            </p>
+          )}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -134,7 +201,9 @@ export default function NewMessagePage() {
             value={rfqIdManual}
             onChange={(e) => setRfqIdManual(e.target.value)}
           />
-          {errors.rfq_id && <p className="text-xs text-red-600">{errors.rfq_id.message}</p>}
+          {errors.rfq_id && (
+            <p className="text-xs text-red-600">{errors.rfq_id.message}</p>
+          )}
         </div>
       )}
 
@@ -142,7 +211,9 @@ export default function NewMessagePage() {
       <div className="space-y-1.5">
         <Label>Message</Label>
         <Textarea placeholder="Write your message…" {...register("body")} />
-        {errors.body && <p className="text-xs text-red-600">{errors.body.message}</p>}
+        {errors.body && (
+          <p className="text-xs text-red-600">{errors.body.message}</p>
+        )}
       </div>
 
       <Button onClick={handleSubmit(onSubmit)} disabled={isSubmitting}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,7 +25,7 @@ export default function ReviewsPage() {
     (async () => {
       setRows(null);
       setMyCompanies(await getMyCompanyMap());
-      const { data, error } = await supabase
+      const { data, error } = await createClient
         .from("reviews")
         .select("id,company_id,author,rating,comment,created_at")
         .order("created_at", { ascending: false })

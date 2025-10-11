@@ -1,5 +1,5 @@
 // src/app/page.tsx
-import { supabaseServer } from "@/lib/supabase";
+import { createServerSupabase } from "@/lib/supabase-server";
 import FrontParcours from "@/components/FrontParcours";
 
 type CatalogRow = {
@@ -16,7 +16,7 @@ type CatalogRow = {
 };
 
 export default async function Page() {
-  const supabase = await supabaseServer();
+  const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("products_catalog")
     .select("*")
@@ -26,6 +26,5 @@ export default async function Page() {
   if (error) {
     console.error("Supabase error:", error);
   }
-
-  return <FrontParcours produits={(data ?? []) as CatalogRow[]} />;
+  return <FrontParcours />;
 }

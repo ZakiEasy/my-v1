@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,7 +30,7 @@ export default function RfqsPage() {
       }
 
       // 1) get my companies (ids)
-      const { data: myCompanies, error: eComp } = await supabase
+      const { data: myCompanies, error: eComp } = await createClient
         .from("companies")
         .select("id,name")
         .eq("owner", uid);
@@ -50,7 +50,7 @@ export default function RfqsPage() {
       }
 
       // 2) list RFQs for my buyer companies
-      const { data, error } = await supabase
+      const { data, error } = await createClient
         .from("rfqs")
         .select("id,buyer_company_id,title,description,created_at")
         .in("buyer_company_id", ids)

@@ -1,311 +1,243 @@
+// src/components/FrontParcours.tsx
 "use client";
+
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase-browser";
 
-import React, { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { ChevronRight, FileUp, ShieldCheck, Receipt, ShoppingCart, CheckCircle2, Filter, RefreshCw } from "lucide-react";
-
-// --- Types ---
-interface Product {
+type Company = {
   id: string;
   name: string;
-  supplier_name: string;
-  category: string;
-  country: string;
-  min_order: number;
-  price: number;
-  rating?: number;
-  in_stock?: boolean;
-}
+  country: string | null;
+  score: number | null;
+  product_families?: string[] | null;
+  certificates?: string[] | null;
+  created_at?: string | null;
+};
 
-// --- Mock data (à brancher sur Supabase plus tard) ---
-const MOCK_PRODUCTS: Product[] = [
-  { id: "p1", name: "Huile d'olive extra vierge 1L", supplier: "Mediterra Foods", category: "Huiles", country: "Tunisie", minOrder: 500, price: 3.85, rating: 4.6, inStock: true },
-  { id: "p2", name: "Semoule fine 25kg", supplier: "GraniX", category: "Céréales", country: "Algérie", minOrder: 200, price: 12.90, rating: 4.2, inStock: true },
-  { id: "p3", name: "Dattes Deglet Nour 5kg", supplier: "Oasis Export", category: "Fruits secs", country: "Algérie", minOrder: 150, price: 16.50, rating: 4.8, inStock: false },
-  { id: "p4", name: "Épices ras el hanout 1kg", supplier: "Atlas Spice", category: "Épices", country: "Maroc", minOrder: 100, price: 7.20, rating: 4.4, inStock: true },
-  { id: "p5", name: "Harissa 190g x 24", supplier: "Cap Bon", category: "Condiments", country: "Tunisie", minOrder: 80, price: 28.0, rating: 4.7, inStock: true },
-];
-export default function FrontParcours({ produits = [] }: { produits: Product[] }) {
-  const [tab, setTab] = useState<string>("fournisseur");
-  
+type Product = {
+  id: string;
+  company_id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  created_at: string | null;
+  company?: Pick<Company, "id" | "name" | "country" | "score">;
+};
+
+export default function FrontParcours() {
+  const supabase = useMemo(() => createClient(), []);
+  const [loading, setLoading] = useState(true);
+  const [companiesCount, setCompaniesCount] = useState<number | null>(null);
+  const [productsCount, setProductsCount] = useState<number | null>(null);
+  const [latestProducts, setLatestProducts] = useState<Product[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        // Compteurs rapides
+        const [{ count: cCount, error: cErr }, { count: pCount, error: pErr }] = await Promise.all([
+          supabase.from("companies").select("*", { count: "exact", head: true }),
+          supabase.from("products").select("*", { count: "exact", head: true }), // table 'products'
+        ]);
+        if (cErr) throw cErr;
+        if (pErr) throw pErr;
+
+        if (!isMounted) return;
+        setCompaniesCount(cCount ?? 0);
+        setProductsCount(pCount ?? 0);
+
+        // Derniers produits + jointure manuelle sur companies
+        const { data: prodData, error: prodErr } = await supabase
+          .from("products")
+          .select("id, company_id, name, category, description, created_at")
+          .order("created_at", { ascending: false })
+          .limit(6);
+        if (prodErr) throw prodErr;
+
+        let enriched: Product[] = [];
+        if (prodData && prodData.length) {
+          const companyIds = Array.from(new Set(prodData.map((p) => p.company_id))).filter(Boolean) as string[];
+
+          let companiesById: Record<string, Company> = {};
+          if (companyIds.length) {
+            const { data: companies, error: compErr } = await supabase
+              .from("companies")
+              .select("id, name, country, score")
+              .in("id", companyIds);
+            if (compErr) throw compErr;
+
+            companiesById = (companies ?? []).reduce((acc, c) => {
+              acc[c.id] = c as Company;
+              return acc;
+            }, {} as Record<string, Company>);
+          }
+
+          enriched = (prodData as Product[]).map((p) => ({
+            ...p,
+            company: companiesById[p.company_id]
+              ? {
+                  id: companiesById[p.company_id].id,
+                  name: companiesById[p.company_id].name,
+                  country: companiesById[p.company_id].country, // string | null
+                  score: companiesById[p.company_id].score, // number | null
+                }
+              : undefined,
+          }));
+        }
+
+        if (!isMounted) return;
+        setLatestProducts(enriched);
+      } catch (e: any) {
+        if (!isMounted) return;
+        setError(e?.message ?? "Une erreur est survenue.");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
+
   return (
-    <main className="min-h-screen bg-gradient-to-b from-white to-slate-50 text-slate-800">
-      <header className="sticky top-0 z-40 border-b bg-white/70 backdrop-blur">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-2xl bg-slate-900 text-white grid place-items-center text-sm font-bold">FI</div>
-            <div>
-              <h1 className="text-xl font-semibold leading-tight">Fournisseur ↔ Importateur</h1>
-              <p className="text-xs text-slate-500 -mt-0.5">Bascule entre les parcours selon votre rôle</p>
+    <main className="min-h-screen w-full bg-gray-50">
+      <section className="mx-auto max-w-6xl px-4 py-10">
+        <header className="mb-10">
+          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
+            Plateforme fournisseurs ↔ importateurs
+          </h1>
+          <p className="mt-3 text-gray-600">
+            Trouve des fournisseurs, publie tes RFQ, vérifie les KYC et consulte les notations — tout au même endroit.
+          </p>
+        </header>
+
+        {/* Parcours / CTA rapides */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <Link
+            href="/companies"
+            className="rounded-2xl bg-white shadow-sm border hover:shadow transition p-6 flex flex-col"
+          >
+            <div className="text-sm uppercase tracking-wider text-gray-500">Étape 1</div>
+            <h2 className="mt-2 text-xl font-semibold">Explorer les fournisseurs</h2>
+            <p className="mt-2 text-gray-600">Parcours les fiches entreprises, leurs scores et leurs certificats.</p>
+            <div className="mt-auto pt-4 text-sm text-gray-500">
+              {companiesCount === null ? "—" : `${companiesCount} entreprises`}
             </div>
+          </Link>
+
+          <Link
+            href="/rfq/new"
+            className="rounded-2xl bg-white shadow-sm border hover:shadow transition p-6 flex flex-col"
+          >
+            <div className="text-sm uppercase tracking-wider text-gray-500">Étape 2</div>
+            <h2 className="mt-2 text-xl font-semibold">Publier un RFQ</h2>
+            <p className="mt-2 text-gray-600">Décris ton besoin, reçois des offres et compare efficacement.</p>
+            <div className="mt-auto pt-4 text-sm text-gray-500">Temps estimé: 3–5 min</div>
+          </Link>
+
+          <Link
+            href="/evidence/upload"
+            className="rounded-2xl bg-white shadow-sm border hover:shadow transition p-6 flex flex-col"
+          >
+            <div className="text-sm uppercase tracking-wider text-gray-500">Étape 3</div>
+            <h2 className="mt-2 text-xl font-semibold">Déposer tes preuves (BL/PO/LC)</h2>
+            <p className="mt-2 text-gray-600">
+              Charge des documents pour la due diligence (lecture publique optionnelle).
+            </p>
+            <div className="mt-auto pt-4 text-sm text-gray-500">Formats: PDF, JPG, PNG</div>
+          </Link>
+        </div>
+
+        {/* Stats / Aperçu */}
+        <div className="mt-10 grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="rounded-2xl bg-white shadow-sm border p-6">
+            <div className="text-sm text-gray-500">Produits référencés</div>
+            <div className="mt-2 text-3xl font-semibold">
+              {productsCount === null ? "—" : productsCount}
+            </div>
+            <div className="mt-2 text-gray-600">Catégories variées, consultables par filtres.</div>
           </div>
-          <div className="hidden md:flex items-center gap-2">
-            <Button variant="ghost" size="sm">Aide</Button>
-            <Button size="sm">Se connecter</Button>
+          <div className="rounded-2xl bg-white shadow-sm border p-6">
+            <div className="text-sm text-gray-500">KYC & Conformité</div>
+            <div className="mt-2 text-3xl font-semibold">Centralisé</div>
+            <div className="mt-2 text-gray-600">Stockage des pièces, suivi des validations, traçabilité.</div>
+          </div>
+          <div className="rounded-2xl bg-white shadow-sm border p-6">
+            <div className="text-sm text-gray-500">Notation & Avis</div>
+            <div className="mt-2 text-3xl font-semibold">Transparence</div>
+            <div className="mt-2 text-gray-600">Retours vérifiés pour des décisions éclairées.</div>
           </div>
         </div>
-      </header>
 
-      <section className="mx-auto max-w-6xl p-4 md:p-6">
-        <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 rounded-2xl p-1">
-            <TabsTrigger value="fournisseur" className="rounded-xl">Parcours Fournisseur</TabsTrigger>
-            <TabsTrigger value="importateur" className="rounded-xl">Parcours Importateur</TabsTrigger>
-          </TabsList>
+        {/* Derniers produits */}
+        <section className="mt-12">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-semibold">Derniers produits publiés</h3>
+            <Link href="/products" className="text-sm underline underline-offset-4">
+              Tout voir
+            </Link>
+          </div>
 
-          {/* --- PARCOURS FOURNISSEUR --- */}
-          <TabsContent value="fournisseur" className="mt-6">
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-              <div className="grid gap-4 md:grid-cols-3">
-                <EtapeCard
-                   icon={<Receipt className="h-5 w-5" />}
-  title="Créer une RFQ"
-  desc="Décrivez votre offre, quantités, délais et incoterms."
-  ctaLabel="Nouvelle RFQ"
-  href="/rfq/new"        // <- TU AS DEJA src/app/rfq/new
-/>
-<EtapeCard
-  icon={<FileUp className="h-5 w-5" />}
-  title="Uploader des preuves (BL/PO/LC)"
-  desc="Chargez vos documents dans le bucket 'evidence'."
-  ctaLabel="Uploader"
-  href="/evidence/upload" // <- TU AS DEJA src/app/evidence/upload
-/>
-<EtapeCard
-  icon={<ShieldCheck className="h-5 w-5" />}
-  title="Conformité & KYC"
-  desc="Vérifiez la conformité, certificats et statuts."
-  ctaLabel="Lancer contrôle"
-  href="/compliance/check" // <- Dossier présent, ajoute page.tsx si manquant
-/>
-              </div>
+          {error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+              {error}
+            </div>
+          )}
 
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Suivi de vos RFQ</CardTitle>
-                  <CardDescription>Visualisez le statut et les pièces associées</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-slate-500">
-                        <tr>
-                          <th className="py-2">RFQ</th>
-                          <th className="py-2">Produit</th>
-                          <th className="py-2">Quantité</th>
-                          <th className="py-2">Statut</th>
-                          <th className="py-2">Preuves</th>
-                          <th className="py-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[
-                          { id: "RFQ-2301", produit: "Huile d'olive 1L", qty: 5_000, statut: "En revue", preuves: 2 },
-                          { id: "RFQ-2302", produit: "Semoule 25kg", qty: 2_500, statut: "Acceptée", preuves: 3 },
-                        ].map((r) => (
-                          <tr key={r.id} className="border-t">
-                            <td className="py-3 font-medium">{r.id}</td>
-                            <td className="py-3">{r.produit}</td>
-                            <td className="py-3">{r.qty.toLocaleString('fr-FR')}</td>
-                            <td className="py-3">
-                              <Badge variant={r.statut === "Acceptée" ? "default" : "secondary"}>{r.statut}</Badge>
-                            </td>
-                            <td className="py-3">{r.preuves} fichier(s)</td>
-                            <td className="py-3 text-right">
-                              <Button variant="ghost" size="sm" className="gap-1">Détails <ChevronRight className="h-4 w-4" /></Button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-32 rounded-2xl bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          ) : latestProducts.length === 0 ? (
+            <div className="rounded-2xl border bg-white p-6 text-gray-600">
+              Aucun produit trouvé pour le moment.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {latestProducts.map((p) => (
+                <article
+                  key={p.id}
+                  className="rounded-2xl bg-white shadow-sm border p-5 hover:shadow transition"
+                >
+                  <div className="text-xs text-gray-500">
+                    {p.created_at ? new Date(p.created_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }) : "—"}
                   </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </TabsContent>
+                  <h4 className="mt-1 text-lg font-semibold">{p.name}</h4>
+                  <div className="text-sm text-gray-600">{p.category || "Sans catégorie"}</div>
+                  {p.description && <p className="mt-2 line-clamp-3 text-gray-700">{p.description}</p>}
 
-          {/* --- PARCOURS IMPORTATEUR --- */}
-          <TabsContent value="importateur" className="mt-6">
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
-              <FiltresProduits />
-              <GrilleProduits produits={MOCK_PRODUCTS} />
-            </motion.div>
-          </TabsContent>
-        </Tabs>
+                  {p.company && (
+                    <div className="mt-3 text-sm text-gray-600">
+                      Fournisseur : <span className="font-medium">{p.company.name}</span>
+                      {p.company.country ? ` · ${p.company.country}` : ""}
+                      {p.company.score !== null ? ` · Score ${p.company.score}` : ""}
+                    </div>
+                  )}
+
+                  <div className="mt-4">
+                    <Link
+                      href={`/products/${p.id}`}
+                      className="text-sm rounded-xl border px-3 py-1.5 hover:bg-gray-50"
+                    >
+                      Voir le produit
+                    </Link>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       </section>
-
-      <footer className="mt-12 border-t bg-white">
-        <div className="mx-auto max-w-6xl px-4 py-6 text-xs text-slate-500">
-          Projet Fournisseur–Importateur • v1 Front • Bascule parcours Fournisseur/Importateur
-        </div>
-      </footer>
     </main>
-  );
-}
-
-function EtapeCard({ icon, title, desc, ctaLabel, href }: {
-  icon: React.ReactNode; title: string; desc: string; ctaLabel: string; href: string;
-}) {
-  return (
-    <Card className="rounded-2xl shadow-sm">
-      <CardHeader className="space-y-2">
-        <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white">{icon}</div>
-        <CardTitle className="leading-tight">{title}</CardTitle>
-        <CardDescription>{desc}</CardDescription>
-      </CardHeader>
-      <CardFooter>
-        <Link href={href} className="inline-flex">
-          <Button className="gap-2">
-            {ctaLabel}
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </Link>
-      </CardFooter>
-    </Card>
-  );
-}
-
-function FiltresProduits() {
-  return (
-    <Card className="rounded-2xl">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Catalogue fournisseurs</CardTitle>
-            <CardDescription>Recherchez par nom, catégorie, origine…</CardDescription>
-          </div>
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => console.log("refresh")}> <RefreshCw className="h-4 w-4"/> Rafraîchir</Button>
-        </div>
-      </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-4">
-        <div className="md:col-span-2">
-          <Label htmlFor="q">Recherche</Label>
-          <Input id="q" placeholder="Ex: huile, dattes, semoule…" />
-        </div>
-        <div>
-          <Label>Catégorie</Label>
-          <Select>
-            <SelectTrigger className="w-full"><SelectValue placeholder="Toutes" /></SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Catégories</SelectLabel>
-                {[
-                  "Huiles",
-                  "Céréales",
-                  "Fruits secs",
-                  "Épices",
-                  "Condiments",
-                ].map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label>Origine</Label>
-          <Select>
-            <SelectTrigger className="w-full"><SelectValue placeholder="Tous pays" /></SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Pays</SelectLabel>
-                {["Algérie", "Maroc", "Tunisie", "Turquie", "Italie"].map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function GrilleProduits({ produits }: { produits: Product[] }) {
-  // état panier
-const [cart, setCart] = useState<string[]>([]);
-
-// add/remove avec types explicites
-const add = (id: string) =>
-  setCart((s: string[]) => (s.includes(id) ? s : [...s, id]));
-
-const remove = (id: string) =>
-  setCart((s: string[]) => s.filter((x: string) => x !== id));
-
-// total avec reduce typé
-const total = useMemo(() => {
-  const map = new Map(produits.map((p) => [p.id, p.price]));
-  return cart.reduce((sum: number, id: string) => sum + (map.get(id) ?? 0), 0);
-}, [cart, produits]);
-
-  return (
-    <div className="mt-4 grid gap-4 lg:grid-cols-3 md:grid-cols-2">
-      {produits.map((p) => (
-        <Card key={p.id} className="rounded-2xl">
-          <CardHeader className="pb-2">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-base">{p.name}</CardTitle>
-                <CardDescription className="mt-1">{p.supplier} • {p.country}</CardDescription>
-              </div>
-              {p.inStock ? (
-                <Badge>En stock</Badge>
-              ) : (
-                <Badge variant="secondary">Sur commande</Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="text-sm">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">{p.category}</Badge>
-              <span className="text-slate-500">MOQ: {p.minOrder.toLocaleString()}</span>
-            </div>
-            <div className="mt-2 text-lg font-semibold">{p.price.toFixed(2)} €</div>
-            {p.rating && (
-              <div className="mt-1 text-xs text-slate-500">Note fournisseur: {p.rating.toFixed(1)}/5</div>
-            )}
-          </CardContent>
-          <CardFooter className="flex items-center justify-between">
-            {cart.includes(p.id) ? (
-              <Button variant="outline" size="sm" onClick={() => remove(p.id)}>Retirer</Button>
-            ) : (
-              <Button size="sm" className="gap-2" onClick={() => add(p.id)}>
-                <ShoppingCart className="h-4 w-4" /> Ajouter
-              </Button>
-            )}
-            <Link href={`/products/${p.id}`} className="inline-flex">
-  <Button variant="ghost" size="sm" className="gap-1">
-    Détails <ChevronRight className="h-4 w-4" />
-  </Button>
-</Link>
-          </CardFooter>
-        </Card>
-      ))}
-
-      {/* Panier sticky */}
-      <div className="lg:col-span-3">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <Card className="mt-2 border-dashed">
-            <CardContent className="py-4 flex items-center justify-between">
-              <div className="text-sm text-slate-600">
-                <span className="font-medium">{cart.length}</span> article(s) sélectionné(s)
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-sm">Total indicatif: <span className="font-semibold">{total.toFixed(2)} €</span></div>
-                <Button size="sm" className="gap-2"><CheckCircle2 className="h-4 w-4"/> Demander devis</Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </div>
   );
 }

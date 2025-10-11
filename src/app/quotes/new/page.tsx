@@ -5,7 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { getMySupplierCompanies, getMyBuyerRfqs } from "@/lib/supa-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +94,7 @@ export default function NewQuotePage() {
   }, [mode, rfqId, rfqIdManual, setValue]);
 
   async function onSubmit(values: z.infer<typeof Schema>) {
-    const { error } = await supabase.from("quotes").insert(values);
+    const { error } = await createClient.from("quotes").insert(values);
     if (error) return toast.error(error.message);
     toast.success("Quote created ✅");
     router.push("/quotes");

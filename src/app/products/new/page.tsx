@@ -31,7 +31,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { getMyCompanyId } from "@/lib/supa-helpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,7 +61,7 @@ export default function NewProductPage() {
     useForm<z.infer<typeof Schema>>({ resolver: zodResolver(Schema) });
 
   async function onSubmit(values: z.infer<typeof Schema>) {
-    const { error } = await supabase.from("products").insert({ ...values, company_id: companyId });
+    const { error } = await createClient.from("products").insert({ ...values, company_id: companyId });
     if (error) return toast.error(error.message);
     toast.success("Product created ✅");
     router.push("/products");

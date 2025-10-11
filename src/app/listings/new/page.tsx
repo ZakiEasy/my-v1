@@ -1,16 +1,16 @@
 "use client";
 import { useEffect, useState } from "react";
 import { CrudCreate } from "@/components/crud/Crud";
-import { supabase } from "@/lib/supabase-client";
+import { supcreateClientabase } from "@/lib/supabase-client";
 
 export default function NewListing(){
   const [productId, setProductId] = useState("");
   useEffect(()=>{ (async()=>{
-    const uid = (await supabase.auth.getUser()).data.user?.id;
+    const uid = (await createClient.auth.getUser()).data.user?.id;
     if(!uid) return;
-    const { data } = await supabase
+    const { data } = await createClient
       .from("products").select("id, company_id, name")
-      .in("company_id", (await supabase.from("companies").select("id").eq("owner", uid)).data?.map(c=>c.id) ?? []);
+      .in("company_id", (await createClient.from("companies").select("id").eq("owner", uid)).data?.map(c=>c.id) ?? []);
     setProductId(data?.[0]?.id ?? "");
   })(); },[]);
   if(!productId) return <main className="p-6">Crée d’abord un produit.</main>;

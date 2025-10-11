@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -30,7 +30,7 @@ export default function QuotesPage() {
         return;
       }
       const ids = companies.map((c) => c.id);
-      const { data, error } = await supabase
+      const { data, error } = await createClient
         .from("quotes")
         .select("id,rfq_id,supplier_id,price,message,status,created_at")
         .in("supplier_id", ids)

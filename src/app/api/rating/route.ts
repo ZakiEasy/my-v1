@@ -1,10 +1,10 @@
 // app/api/ratings/route.ts
 import { NextResponse } from 'next/server';
-import { supabaseServer } from '@/lib/supabase';
+import { createServerSupabase } from '@/lib/supabase-server';
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const supabase = await supabaseServer();
+  const supabase = await createServerSupabase();
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 });

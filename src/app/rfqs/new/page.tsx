@@ -5,7 +5,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 import { getMyCompanies } from "@/lib/supa-helpers";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -60,7 +60,7 @@ export default function NewRfqPage() {
   });
 
   async function onSubmit(values: z.infer<typeof Schema>) {
-    const { error } = await supabase.from("rfqs").insert(values);
+    const { error } = await createClient.from("rfqs").insert(values);
     if (error) return toast.error(error.message);
     toast.success("RFQ created ✅");
     router.push("/rfqs");

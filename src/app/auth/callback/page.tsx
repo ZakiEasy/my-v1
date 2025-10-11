@@ -4,7 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { toast } from "sonner";
 // si tu utilises Supabase ici, importe ton client côté client
-import { supabase } from "@/lib/supabase-client";
+import { createClient } from "@/lib/supabase-client";
 
 // Empêche le prerender/SSG de cette page pendant le build
 export const dynamic = "force-dynamic";
