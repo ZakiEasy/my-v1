@@ -1,13 +1,14 @@
+// src/app/login/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase-browser"; // ⬅️ remplace -client par -browser
+import { createClient } from "@/lib/supabase-browser";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const router = useRouter();
-
-  // Instancie le client une seule fois côté client
   const supabase = useMemo(() => createClient(), []);
 
   const [email, setEmail] = useState("");
@@ -15,24 +16,18 @@ export default function LoginPage() {
   const [pending, setPending] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Optionnel: si déjà connecté, redirige
   useEffect(() => {
     let mounted = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
       if (mounted && data.user) router.replace("/");
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [supabase, router]);
 
   async function signIn() {
     setMsg(null);
-    if (!email || !password) {
-      setMsg("Email et mot de passe requis.");
-      return;
-    }
+    if (!email || !password) return setMsg("Email et mot de passe requis.");
     try {
       setPending(true);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -47,15 +42,12 @@ export default function LoginPage() {
 
   async function signUp() {
     setMsg(null);
-    if (!email || !password) {
-      setMsg("Email et mot de passe requis.");
-      return;
-    }
+    if (!email || !password) return setMsg("Email et mot de passe requis.");
     try {
       setPending(true);
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) return setMsg(error.message);
-      setMsg("Compte créé. Vérifie tes emails pour valider ton compte, puis connecte-toi.");
+      setMsg("Compte créé. Vérifie ton email.");
     } catch (e: any) {
       setMsg(e?.message ?? "Erreur lors de la création du compte.");
     } finally {
@@ -66,48 +58,12 @@ export default function LoginPage() {
   return (
     <main className="p-6 max-w-sm mx-auto space-y-3">
       <h1 className="text-xl font-semibold">Connexion</h1>
-
-      {msg && (
-        <div className="rounded border border-amber-200 bg-amber-50 text-amber-900 p-2 text-sm">
-          {msg}
-        </div>
-      )}
-
-      <input
-        className="border p-2 w-full rounded"
-        placeholder="email"
-        type="email"
-        autoComplete="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        disabled={pending}
-      />
-
-      <input
-        className="border p-2 w-full rounded"
-        type="password"
-        placeholder="mot de passe"
-        autoComplete="current-password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        disabled={pending}
-      />
-
+      {msg && <div className="rounded border border-amber-200 bg-amber-50 text-amber-900 p-2 text-sm">{msg}</div>}
+      <Input placeholder="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={pending} />
+      <Input placeholder="mot de passe" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={pending} />
       <div className="flex gap-2">
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-          onClick={signIn}
-          disabled={pending}
-        >
-          {pending ? "Connexion..." : "Se connecter"}
-        </button>
-        <button
-          className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50"
-          onClick={signUp}
-          disabled={pending}
-        >
-          {pending ? "Création..." : "Créer un compte"}
-        </button>
+        <Button onClick={signIn} disabled={pending}>{pending ? "Connexion..." : "Se connecter"}</Button>
+        <Button variant="outline" onClick={signUp} disabled={pending}>{pending ? "Création..." : "Créer un compte"}</Button>
       </div>
     </main>
   );

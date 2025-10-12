@@ -1,82 +1,95 @@
+// src/app/rfqs/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase-client";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase-browser";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { getCurrentUserId } from "@/lib/supa-helpers";
 
-type Rfq = {
+type RelatedRFQ = {
   id: string;
-  buyer_company_id: string;
-  title: string;
-  description: string | null;
+  title: string | null;
+  status: string;
   created_at: string;
 };
 
+type RfqRow = {
+  rfq_id: string;
+  rfqs: RelatedRFQ | null; // ← on normalise à un seul objet (pas tableau)
+};
+
 export default function RfqsPage() {
-  const [rfqs, setRfqs] = useState<Rfq[] | null>(null);
-  const [companyNames, setCompanyNames] = useState<Record<string, string>>({});
+  const supabase = useMemo(() => createClient(), []);
+  const [rows, setRows] = useState<RfqRow[] | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     (async () => {
-      setRfqs(null);
-      const uid = await getCurrentUserId();
-      if (!uid) {
-        toast.warning("Please sign in first");
+      // Auth
+      const { data: du, error: eu } = await supabase.auth.getUser();
+      if (!mounted) return;
+
+      if (eu || !du.user) {
+        setRows([]);
+        toast.warning("Please sign in");
         return;
       }
 
-      // 1) get my companies (ids)
-      const { data: myCompanies, error: eComp } = await createClient
-        .from("companies")
-        .select("id,name")
-        .eq("owner", uid);
-      if (eComp) {
-        toast.error(eComp.message);
-        setRfqs([]);
-        return;
-      }
-      const ids = (myCompanies ?? []).map((c) => c.id);
-      setCompanyNames(
-        Object.fromEntries((myCompanies ?? []).map((c) => [c.id, c.name]))
-      );
+      // RFQs où je suis participant
+      const { data, error } = await supabase
+        .from("rfq_participants")
+        .select("rfq_id, rfqs(id,title,status,created_at)")
+        .eq("user_id", du.user.id)
+        .order("created_at", { referencedTable: "rfqs", ascending: false })
+        .limit(200);
 
-      if (ids.length === 0) {
-        setRfqs([]);
-        return;
-      }
-
-      // 2) list RFQs for my buyer companies
-      const { data, error } = await createClient
-        .from("rfqs")
-        .select("id,buyer_company_id,title,description,created_at")
-        .in("buyer_company_id", ids)
-        .order("created_at", { ascending: false });
+      if (!mounted) return;
 
       if (error) {
         toast.error(error.message);
-        setRfqs([]);
+        setRows([]);
         return;
       }
-      setRfqs((data ?? []) as Rfq[]);
-    })();
-  }, []);
 
-  const rows = useMemo(() => rfqs ?? [], [rfqs]);
+      // ⚙️ Normalisation: rfqs peut être objet OU tableau → on prend le 1er si tableau
+      const normalized: RfqRow[] = (data ?? []).map((row: any) => {
+        const raw = row?.rfqs;
+        const one: RelatedRFQ | null = Array.isArray(raw)
+          ? (raw[0] ?? null)
+          : (raw ?? null);
+
+        return {
+          rfq_id: String(row.rfq_id),
+          rfqs: one
+            ? {
+                id: String(one.id),
+                title: one.title ?? null,
+                status: String(one.status),
+                created_at: String(one.created_at),
+              }
+            : null,
+        };
+      });
+
+      setRows(normalized);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [supabase]);
 
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">My RFQs</h1>
-        <Button asChild>
-          <Link href="/rfqs/new">Create RFQ</Link>
-        </Button>
+        <Button asChild><Link href="/rfqs/new">New RFQ</Link></Button>
       </div>
 
-      {rfqs === null ? (
+      {rows === null ? (
         <div className="space-y-2">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
@@ -84,7 +97,7 @@ export default function RfqsPage() {
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded border p-6 text-center text-sm">
-          No RFQs yet. <Link className="underline" href="/rfqs/new">Create your first RFQ</Link>.
+          No RFQs yet. <Link href="/rfqs/new" className="underline">Create one</Link>.
         </div>
       ) : (
         <div className="overflow-x-auto rounded border">
@@ -92,22 +105,25 @@ export default function RfqsPage() {
             <thead className="bg-muted/40">
               <tr>
                 <th className="text-left p-3">Title</th>
-                <th className="text-left p-3">Buyer company</th>
+                <th className="text-left p-3">Status</th>
                 <th className="text-left p-3">Created</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t">
-                  <td className="p-3">{r.title}</td>
-                  <td className="p-3">
-                    {companyNames[r.buyer_company_id] ?? r.buyer_company_id}
-                  </td>
-                  <td className="p-3">
-                    {new Date(r.created_at).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const rfq = r.rfqs;
+                return (
+                  <tr key={r.rfq_id} className="border-t">
+                    <td className="p-3">{rfq?.title ?? r.rfq_id.slice(0, 8) + "…"}</td>
+                    <td className="p-3">{rfq?.status ?? "—"}</td>
+                    <td className="p-3">
+                      {rfq?.created_at
+                        ? new Date(rfq.created_at).toLocaleString("fr-FR", { timeZone: "Europe/Paris" })
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

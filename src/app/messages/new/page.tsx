@@ -1,3 +1,4 @@
+// src/app/messages/new/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -58,24 +59,43 @@ export default function NewMessagePage() {
     return data.user?.id ?? null;
   }
 
-  // Remplace cette fonction par ta vue/RPC si tu as déjà "participating RFQs"
+  /**
+   * Récupère les RFQ où l'utilisateur est participant :
+   * 1) lit rfq_participants pour l'user_id
+   * 2) charge les RFQ correspondants
+   * 3) construit des labels propres (title || id)
+   */
   async function getParticipatingRfqOptionsClient(uid: string): Promise<RfqOption[]> {
-    // Exemple générique : on liste les RFQs que l'utilisateur possède (ou adapte à ta vue de participation)
-    const { data, error } = await supabase
-      .from("rfqs")
-      .select("id,title,name")
-      .order("created_at", { ascending: false })
-      .limit(50);
+    // 1) ids de RFQ
+    const { data: parts, error: e1 } = await supabase
+      .from("rfq_participants")
+      .select("rfq_id")
+      .eq("user_id", uid)
+      .limit(200);
 
-    if (error) {
-      toast.error(error.message);
+    if (e1) {
+      toast.error(e1.message);
+      return [];
+    }
+    const ids = Array.from(new Set((parts ?? []).map((p: any) => p.rfq_id))).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    // 2) détails RFQ
+    const { data: rfqs, error: e2 } = await supabase
+      .from("rfqs")
+      .select("id,title,created_at,status")
+      .in("id", ids)
+      .order("created_at", { ascending: false });
+
+    if (e2) {
+      toast.error(e2.message);
       return [];
     }
 
-    // Label: title > name > id
-    return (data ?? []).map((r: any) => ({
+    // 3) labels
+    return (rfqs ?? []).map((r: any) => ({
       id: r.id,
-      label: r.title ?? r.name ?? r.id,
+      label: r.title ?? r.id,
     }));
   }
 
@@ -93,7 +113,7 @@ export default function NewMessagePage() {
       }
       setSender(uid);
 
-      // RFQs list
+      // RFQs list (participant)
       const list = await getParticipatingRfqOptionsClient(uid);
       if (!mounted) return;
 
@@ -119,15 +139,20 @@ export default function NewMessagePage() {
       toast.error("Not signed in");
       return;
     }
+
+    // INSERT message — la policy RLS exige que (sender) soit participant du RFQ
     const { error } = await supabase.from("messages").insert({
       rfq_id: values.rfq_id,
       sender,
       body: values.body,
     });
+
     if (error) {
+      // Erreurs typiques : violation RLS si l'user n'est pas participant de ce RFQ
       toast.error(error.message);
       return;
     }
+
     toast.success("Message sent ✅");
     router.push("/messages");
   }

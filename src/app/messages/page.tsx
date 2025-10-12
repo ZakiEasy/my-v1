@@ -1,3 +1,4 @@
+// src/app/messages/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -5,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase-browser"; // ✅ client-side
+import { createClient } from "@/lib/supabase-browser";
 
 type Msg = {
   id: string;
@@ -16,6 +17,7 @@ type Msg = {
 };
 
 export default function MessagesPage() {
+  // ✅ Crée UNE instance Supabase côté client
   const supabase = useMemo(() => createClient(), []);
 
   const [rows, setRows] = useState<Msg[] | null>(null);
@@ -31,8 +33,11 @@ export default function MessagesPage() {
     return data.user?.id ?? null;
   }
 
+  // Chargement initial + abonnement realtime
   useEffect(() => {
     let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
     (async () => {
       // 1) Auth
       const uid = await getCurrentUserIdClient();
@@ -45,7 +50,7 @@ export default function MessagesPage() {
       }
       setMe(uid);
 
-      // 2) Données (RLS doit filtrer côté DB)
+      // 2) Données initiales
       const { data, error } = await supabase
         .from("messages")
         .select("id,rfq_id,sender,body,created_at")
@@ -60,10 +65,31 @@ export default function MessagesPage() {
         return;
       }
       setRows((data ?? []) as Msg[]);
+
+      // 3) Realtime INSERT sur public.messages
+      channel = supabase
+        .channel("messages-live")
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages" },
+          (payload) => {
+            const msg = payload.new as Msg;
+            // Optionnel : ignorer si l’utilisateur n’est pas participant — RLS l’empêche côté client
+            setRows((prev) => [msg, ...(prev ?? [])]);
+          }
+        )
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            // ok
+          }
+        });
     })();
 
     return () => {
       mounted = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [supabase]);
 
@@ -104,7 +130,7 @@ export default function MessagesPage() {
             <tbody>
               {rows.map((m) => (
                 <tr key={m.id} className="border-t">
-                  <td className="p-3">{m.rfq_id?.slice(0, 8) ?? "—"}…</td>
+                  <td className="p-3">{m.rfq_id ? `${m.rfq_id.slice(0, 8)}…` : "—"}</td>
                   <td className="p-3">
                     {me && m.sender === me ? "You" : (m.sender ?? "").slice(0, 6) + "…"}
                   </td>
